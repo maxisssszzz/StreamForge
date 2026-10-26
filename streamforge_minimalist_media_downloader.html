@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamForge — Minimalist Media Downloader</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f6ff',
+                            100: '#e0edff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        },
+                        dark: {
+                            900: '#0b0f17',
+                            800: '#131924',
+                            700: '#1c2433',
+                            600: '#273247',
+                            500: '#37455d'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Alpine.js Component State Engine -->
+    <script defer src="https://unpkg.com/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.3);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.5);
+        }
+        /* Custom subtle range slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #273247;
+            border-radius: 9999px;
+        }
+        .light input[type=range]::-webkit-slider-runnable-track {
+            background: #e2e8f0;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -5px;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body x-data="downloaderApp()" x-init="initApp()" class="bg-gray-50 dark:bg-dark-900 text-gray-800 dark:text-gray-100 font-sans min-h-screen transition-colors duration-300 antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Toast Notification Container -->
+    <div class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div x-show="toast.visible" 
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="opacity-0 translate-y-[-10px] scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave="transition ease-in duration-200 transform"
+                 x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-[-10px] scale-95"
+                 class="pointer-events-auto p-4 rounded-xl shadow-xl backdrop-blur-md border flex items-center gap-3 text-sm"
+                 :class="{
+                     'bg-dark-800/90 text-white border-gray-700/60 dark:bg-dark-800/90': toast.type === 'info',
+                     'bg-emerald-950/80 text-emerald-200 border-emerald-800/60': toast.type === 'success',
+                     'bg-rose-950/80 text-rose-200 border-rose-800/60': toast.type === 'error'
+                 }">
+                <i :data-lucide="toast.icon || 'info'" class="w-5 h-5 shrink-0"></i>
+                <span class="flex-1 font-medium" x-text="toast.message"></span>
+                <button @click="removeToast(toast.id)" class="text-gray-400 hover:text-white transition">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <!-- Main Outer Wrapper -->
+    <div class="max-w-4xl mx-auto px-4 py-8 md:py-12 flex flex-col min-h-screen justify-between">
+        
+        <!-- Header / Navigation -->
+        <header class="flex items-center justify-between mb-8 pb-4 border-b border-gray-200 dark:border-dark-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <i data-lucide="arrow-down-to-line" class="w-5 h-5 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-gray-400">StreamForge</h1>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">Minimalist Media Extractor</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button @click="openSaveLocationPrompt()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-200/60 dark:bg-dark-800 hover:bg-gray-300 dark:hover:bg-dark-700 transition" title="Choose where downloads are saved">
+                    <i data-lucide="folder-open" class="w-4 h-4"></i>
+                    <span class="hidden sm:inline">Save location</span>
+                </button>
+
+                <!-- Preset Quick Test -->
+                <button @click="loadSampleUrl()" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-200/60 dark:bg-dark-800 hover:bg-gray-300 dark:hover:bg-dark-700 transition">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-brand-500"></i>
+                    <span>Try Sample</span>
+                </button>
+
+                <!-- Dark/Light Theme Toggle -->
+                <button @click="toggleTheme()" class="p-2.5 rounded-xl bg-gray-200/60 dark:bg-dark-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-dark-700 transition" title="Toggle Theme">
+                    <i :data-lucide="darkMode ? 'sun' : 'moon'" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 space-y-6">
+
+            <!-- Hero URL Input Box -->
+            <div class="relative group">
+                <div class="absolute -inset-0.5 bg-gradient-to-r from-brand-500 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
+                
+                <div class="relative bg-white dark:bg-dark-800 rounded-2xl p-2 md:p-3 shadow-xl border border-gray-200/80 dark:border-dark-700/80 flex flex-col sm:flex-row items-center gap-2">
+                    
+                    <div class="flex items-center w-full px-3 py-2 gap-3">
+                        <i data-lucide="link" class="w-5 h-5 text-gray-400 shrink-0"></i>
+                        <input type="text" 
+                               x-model="url" 
+                               @input="handleUrlInput()"
+                               placeholder="Paste YouTube, Vimeo, or Video URL here..." 
+                               class="w-full bg-transparent border-none outline-none text-sm md:text-base text-gray-900 dark:text-white placeholder-gray-400 focus:ring-0">
+                        
+                        <!-- Clear input button -->
+                        <button x-show="url.length > 0" @click="clearInput()" class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition">
+                            <i data-lucide="x-circle" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2 w-full sm:w-auto justify-end px-2 pb-2 sm:pb-0">
+                        <!-- Paste Button -->
+                        <button @click="pasteFromClipboard()" class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 transition shrink-0">
+                            <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+                            <span>Paste</span>
+                        </button>
+
+                        <!-- Fetch / Analyze Button -->
+                        <button @click="analyzeUrl()" :disabled="isLoading || !url" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs md:text-sm font-semibold text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-500/20 transition shrink-0">
+                            <template x-if="!isLoading">
+                                <span class="flex items-center gap-1.5">
+                                    <span>Fetch</span>
+                                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                                </span>
+                            </template>
+                            <template x-if="isLoading">
+                                <span class="flex items-center gap-2">
+                                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                                    <span>Parsing...</span>
+                                </span>
+                            </template>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State Placeholder -->
+            <div x-show="!videoData && !isLoading" class="py-16 text-center rounded-2xl border-2 border-dashed border-gray-200 dark:border-dark-800 flex flex-col items-center justify-center p-6">
+                <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-dark-800/80 flex items-center justify-center text-gray-400 mb-4">
+                    <i data-lucide="video" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-base font-semibold text-gray-700 dark:text-gray-300 mb-1">Ready to Extract Media</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400 max-w-xs mb-4">Paste any YouTube URL above to customize quality, audio bitrates, or trim clip lengths.</p>
+                <button @click="loadSampleUrl()" class="text-xs font-semibold text-brand-500 hover:underline flex items-center gap-1">
+                    <span>Try with a sample link</span>
+                    <i data-lucide="chevron-right" class="w-3 h-3"></i>
+                </button>
+            </div>
+
+            <!-- Loaded Video Preview & Configuration Panel -->
+            <div x-show="videoData" x-cloak 
+                 x-transition:enter="transition ease-out duration-300 transform"
+                 x-transition:enter-start="opacity-0 translate-y-4"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="space-y-6">
+
+                <!-- Video Metadata Card -->
+                <div class="bg-white dark:bg-dark-800 rounded-2xl p-4 md:p-5 shadow-lg border border-gray-200/80 dark:border-dark-700/80 flex flex-col md:flex-row gap-5 items-start">
+                    
+                    <!-- Thumbnail with Duration Badge -->
+                    <div class="relative w-full md:w-64 h-40 md:h-36 rounded-xl overflow-hidden shrink-0 bg-dark-900 group">
+                        <img :src="videoData?.thumbnail" :alt="videoData?.title" class="w-full h-full object-cover transition duration-300 group-hover:scale-105">
+                        <div class="absolute bottom-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs font-mono font-medium px-2 py-0.5 rounded">
+                            <span x-text="videoData?.durationFormatted"></span>
+                        </div>
+                        <div class="absolute top-2 left-2 bg-red-600/90 text-white text-[10px] font-bold tracking-wider px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                            <i data-lucide="play" class="w-3 h-3 fill-current"></i>
+                            <span x-text="videoData?.extractor || 'Media'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Meta details -->
+                    <div class="flex-1 flex flex-col justify-between h-full space-y-2">
+                        <div>
+                            <h2 class="text-base md:text-lg font-bold text-gray-900 dark:text-white line-clamp-2 leading-snug" x-text="videoData?.title"></h2>
+                            <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                <span class="flex items-center gap-1 font-medium text-gray-700 dark:text-gray-300">
+                                    <i data-lucide="user" class="w-3.5 h-3.5 text-brand-500"></i>
+                                    <span x-text="videoData?.channel"></span>
+                                </span>
+                                <span x-show="videoData?.views">•</span>
+                                <span x-show="videoData?.views" class="flex items-center gap-1">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                    <span x-text="videoData?.views"></span> views
+                                </span>
+                                <span x-show="videoData?.uploadDate">•</span>
+                                <span x-text="videoData?.uploadDate"></span>
+                            </div>
+                        </div>
+
+                        <!-- Quick Badges -->
+                        <div class="flex flex-wrap gap-2 pt-2">
+                            <span x-show="videoData?.maxHeight" class="text-[11px] px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium" x-text="videoData?.maxWidth >= 3840 ? 'Up to 4K' : `Up to ${videoData?.maxHeight}p`"></span>
+                            <span x-show="videoData?.hasAudio" class="text-[11px] px-2.5 py-1 rounded-md bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20 font-medium">Audio available</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Downloads Controls & Options Block -->
+                <div class="bg-white dark:bg-dark-800 rounded-2xl p-5 md:p-6 shadow-lg border border-gray-200/80 dark:border-dark-700/80 space-y-6">
+
+                    <!-- Mode Toggle: Video / Audio / GIF -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+                            1. Select Media Format Type
+                        </label>
+                        <div class="grid grid-cols-3 gap-2 p-1 bg-gray-100 dark:bg-dark-900 rounded-xl border border-gray-200/50 dark:border-dark-700/50">
+                            <button @click="config.mode = 'video'" 
+                                    :class="config.mode === 'video' ? 'bg-white dark:bg-dark-700 text-brand-600 dark:text-white shadow-md' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'"
+                                    class="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs md:text-sm font-semibold transition">
+                                <i data-lucide="video" class="w-4 h-4"></i>
+                                <span>Video + Audio</span>
+                            </button>
+                            
+                            <button @click="config.mode = 'audio'" 
+                                    :class="config.mode === 'audio' ? 'bg-white dark:bg-dark-700 text-brand-600 dark:text-white shadow-md' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'"
+                                    class="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs md:text-sm font-semibold transition">
+                                <i data-lucide="music" class="w-4 h-4"></i>
+                                <span>Audio Only</span>
+                            </button>
+
+                            <button @click="config.mode = 'gif'" 
+                                    :class="config.mode === 'gif' ? 'bg-white dark:bg-dark-700 text-brand-600 dark:text-white shadow-md' : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'"
+                                    class="flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs md:text-sm font-semibold transition">
+                                <i data-lucide="film" class="w-4 h-4"></i>
+                                <span>Animated GIF</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Options Grid: Dynamic based on Selected Mode -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+
+                        <!-- VIDEO CONFIGURATION OPTIONS -->
+                        <template x-if="config.mode === 'video'">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Video Resolution & Quality</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <template x-for="q in videoQualities" :key="q.id">
+                                            <button @click="config.videoQuality = q.id"
+                                                    :disabled="!isQualityAvailable(q.id)"
+                                                    :title="isQualityAvailable(q.id) ? q.label : `This video only goes up to ${videoData.maxHeight}p`"
+                                                    :class="!isQualityAvailable(q.id) ? 'border-gray-200 dark:border-dark-700 text-gray-400 opacity-40 cursor-not-allowed' : (config.videoQuality === q.id ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold' : 'border-gray-200 dark:border-dark-700 hover:bg-gray-50 dark:hover:bg-dark-700/50 text-gray-700 dark:text-gray-300')"
+                                                    class="flex items-center justify-between p-2.5 rounded-xl border text-xs transition">
+                                                <div class="flex items-center gap-1.5">
+                                                    <span x-text="q.label"></span>
+                                                    <span x-show="q.fps" class="text-[10px] bg-gray-200 dark:bg-dark-600 px-1 rounded text-gray-600 dark:text-gray-300" x-text="q.fps"></span>
+                                                </div>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-2">
+                                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Container Format</span>
+                                    <div class="flex gap-1.5">
+                                        <template x-for="fmt in ['MP4', 'WEBM', 'MKV']" :key="fmt">
+                                            <button @click="config.videoContainer = fmt"
+                                                    :class="config.videoContainer === fmt ? 'bg-brand-600 text-white' : 'bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400'"
+                                                    class="px-3 py-1 rounded-lg text-xs font-semibold transition"
+                                                    x-text="fmt">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- AUDIO CONFIGURATION OPTIONS -->
+                        <template x-if="config.mode === 'audio'">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Audio Bitrate (Sound Quality)</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <template x-for="b in audioBitrates" :key="b.id">
+                                            <button @click="config.audioBitrate = b.id"
+                                                    :class="config.audioBitrate === b.id ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold' : 'border-gray-200 dark:border-dark-700 hover:bg-gray-50 dark:hover:bg-dark-700/50 text-gray-700 dark:text-gray-300'"
+                                                    class="flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs transition">
+                                                <span class="font-bold" x-text="b.label"></span>
+                                                <span class="text-[10px] text-gray-400 mt-0.5" x-text="b.note"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-2">
+                                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Audio Codec / Format</span>
+                                    <div class="flex gap-1.5">
+                                        <template x-for="fmt in ['MP3', 'M4A', 'OPUS', 'FLAC', 'WAV']" :key="fmt">
+                                            <button @click="config.audioCodec = fmt"
+                                                    :class="config.audioCodec === fmt ? 'bg-brand-600 text-white' : 'bg-gray-100 dark:bg-dark-700 text-gray-600 dark:text-gray-400'"
+                                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold transition"
+                                                    x-text="fmt">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- GIF CONFIGURATION OPTIONS -->
+                        <template x-if="config.mode === 'gif'">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">FPS (Frames Per Second)</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <template x-for="fps in [15, 24, 30]" :key="fps">
+                                            <button @click="config.gifFps = fps"
+                                                    :class="config.gifFps === fps ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-400 font-bold' : 'border-gray-200 dark:border-dark-700 text-gray-700 dark:text-gray-300'"
+                                                    class="py-2 rounded-xl border text-xs text-center transition"
+                                                    x-text="fps + ' FPS'">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Width Resolution</label>
+                                    <select x-model="config.gifWidth" class="w-full bg-gray-50 dark:bg-dark-700 border border-gray-200 dark:border-dark-600 rounded-xl px-3 py-2 text-xs text-gray-800 dark:text-white outline-none">
+                                        <option value="480">480p (Standard Web)</option>
+                                        <option value="720">720p (HD Quality)</option>
+                                        <option value="320">320p (Small File Size)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- SECONDARY AUDIO / TRACK SWITCHES -->
+                        <div class="space-y-4 border-t md:border-t-0 md:border-l border-gray-100 dark:border-dark-700 md:pl-5 pt-4 md:pt-0">
+                            <label class="block text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                                Output Toggles
+                            </label>
+
+                            <!-- Audio Mute Switch -->
+                            <div x-show="config.mode === 'video'" class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-900/60 border border-gray-200/60 dark:border-dark-700/60">
+                                <div class="flex items-center gap-2.5">
+                                    <i :data-lucide="config.includeAudio ? 'volume-2' : 'volume-x'" class="w-4 h-4 text-brand-500"></i>
+                                    <div>
+                                        <div class="text-xs font-semibold text-gray-800 dark:text-gray-200">Include Sound Track</div>
+                                        <div class="text-[10px] text-gray-400" x-text="config.includeAudio ? 'Audio multiplexed with video stream' : 'Muted video (Video only stream)'"></div>
+                                    </div>
+                                </div>
+                                <button @click="config.includeAudio = !config.includeAudio" 
+                                        :class="config.includeAudio ? 'bg-brand-600' : 'bg-gray-300 dark:bg-dark-600'" 
+                                        class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none">
+                                    <span :class="config.includeAudio ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                                </button>
+                            </div>
+
+                            <!-- Embed Metadata -->
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-900/60 border border-gray-200/60 dark:border-dark-700/60">
+                                <div class="flex items-center gap-2.5">
+                                    <i data-lucide="tag" class="w-4 h-4 text-brand-500"></i>
+                                    <div>
+                                        <div class="text-xs font-semibold text-gray-800 dark:text-gray-200">Embed ID3 Tag & Cover</div>
+                                        <div class="text-[10px] text-gray-400" x-text="config.mode === 'audio' ? 'Save tags and thumbnail to the audio file' : 'Save media title, uploader, and metadata'"></div>
+                                    </div>
+                                </div>
+                                <button @click="config.embedMetadata = !config.embedMetadata" 
+                                        :class="config.embedMetadata ? 'bg-brand-600' : 'bg-gray-300 dark:bg-dark-600'" 
+                                        class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none">
+                                    <span :class="config.embedMetadata ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Collapsible Advanced Options Accordion -->
+                    <div class="border-t border-gray-100 dark:border-dark-700 pt-4">
+                        <button @click="showAdvanced = !showAdvanced" class="flex items-center justify-between w-full py-1 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:text-brand-500 transition">
+                            <span class="flex items-center gap-2">
+                                <i data-lucide="sliders" class="w-4 h-4 text-brand-500"></i>
+                                <span>Advanced Trimming & Subtitle Options</span>
+                            </span>
+                            <i :data-lucide="showAdvanced ? 'chevron-up' : 'chevron-down'" class="w-4 h-4"></i>
+                        </button>
+
+                        <div x-show="showAdvanced" x-collapse x-cloak class="mt-4 space-y-5 pt-2">
+                            
+                            <!-- Video Trimmer -->
+                            <div class="bg-gray-50 dark:bg-dark-900/50 p-4 rounded-xl border border-gray-200/60 dark:border-dark-700/60 space-y-3">
+                                <div class="flex justify-between items-center text-xs">
+                                    <span class="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <i data-lucide="scissors" class="w-3.5 h-3.5 text-brand-500"></i>
+                                        <span>Clip Trimmer (Time Range)</span>
+                                    </span>
+                                    <span class="font-mono text-gray-500" x-text="formatTime(trimStart) + ' — ' + formatTime(trimEnd)"></span>
+                                </div>
+
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-[11px] text-gray-500 mb-1">Start Time (sec)</label>
+                                        <input type="range" min="0" :max="videoData?.durationSeconds || 100" x-model.number="trimStart" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] text-gray-500 mb-1">End Time (sec)</label>
+                                        <input type="range" :min="trimStart" :max="videoData?.durationSeconds || 100" x-model.number="trimEnd" class="w-full">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Subtitles Extraction Section -->
+                            <div class="bg-gray-50 dark:bg-dark-900/50 p-4 rounded-xl border border-gray-200/60 dark:border-dark-700/60 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-semibold text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                                        <i data-lucide="subtitles" class="w-3.5 h-3.5 text-brand-500"></i>
+                                        <span>Subtitles / Captions Extraction</span>
+                                    </span>
+                                    <input type="checkbox" x-model="config.downloadSubs" class="rounded text-brand-600 focus:ring-brand-500 bg-gray-200 dark:bg-dark-700 border-none w-4 h-4">
+                                </div>
+
+                                <div x-show="config.downloadSubs" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                    <div>
+                                        <label class="block text-[11px] text-gray-500 mb-1">Language</label>
+                                        <select x-model="config.subLang" class="w-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg p-2 text-xs">
+                                            <option value="en">English (Auto-generated)</option>
+                                            <option value="es">Spanish</option>
+                                            <option value="fr">French</option>
+                                            <option value="de">German</option>
+                                            <option value="ja">Japanese</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] text-gray-500 mb-1">Subtitle Format</label>
+                                        <select x-model="config.subFormat" class="w-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg p-2 text-xs">
+                                            <option value="srt">SubRip (.SRT)</option>
+                                            <option value="vtt">WebVTT (.VTT)</option>
+                                            <option value="ass">Advanced SubStation Alpha (.ASS)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Main CTA Download Button -->
+                    <div class="pt-2">
+                        <button @click="startDownloadProcess()" :disabled="isConverting" class="w-full py-4 rounded-xl bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-base shadow-xl shadow-brand-500/25 active:scale-[0.99] transition duration-200 flex items-center justify-center gap-2">
+                            <i data-lucide="download" class="w-5 h-5"></i>
+                            <span x-text="isConverting ? 'Download in progress…' : 'Start Download'"></span>
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Download History / Queue Table Section -->
+            <div class="bg-white dark:bg-dark-800 rounded-2xl p-5 shadow-lg border border-gray-200/80 dark:border-dark-700/80 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <i data-lucide="history" class="w-4 h-4 text-brand-500"></i>
+                        <span>Recent Downloads</span>
+                    </h3>
+                    <button x-show="downloadHistory.length > 0" @click="clearHistory()" class="text-xs text-gray-400 hover:text-rose-500 transition">
+                        Clear History
+                    </button>
+                </div>
+
+                <div x-show="downloadHistory.length === 0" class="py-8 text-center text-xs text-gray-400">
+                    No files downloaded yet. Extracted media will appear here.
+                </div>
+
+                <div x-show="downloadHistory.length > 0" class="space-y-2">
+                    <template x-for="item in downloadHistory" :key="item.id">
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-dark-900/60 border border-gray-100 dark:border-dark-700/50 hover:border-gray-300 dark:hover:border-dark-600 transition">
+                            <div class="flex items-center gap-3 overflow-hidden">
+                                <div class="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-dark-700">
+                                    <img :src="item.thumbnail" class="w-full h-full object-cover">
+                                </div>
+                                <div class="truncate">
+                                    <div class="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate" x-text="item.title"></div>
+                                    <div class="text-[10px] text-gray-400 flex items-center gap-2 mt-0.5">
+                                        <span class="uppercase font-bold text-brand-500" x-text="item.format"></span>
+                                        <span>•</span>
+                                        <span x-text="item.size"></span>
+                                        <span>•</span>
+                                        <span x-text="item.timestamp"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button @click="reDownload(item)" class="p-2 text-gray-400 hover:text-brand-500 hover:bg-white dark:hover:bg-dark-700 rounded-lg transition shrink-0" title="Download Again">
+                                <i data-lucide="download-cloud" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="mt-12 text-center text-xs text-gray-400 border-t border-gray-200 dark:border-dark-800 pt-6">
+            <p>StreamForge runs yt-dlp locally. Only download media you have permission to use.</p>
+        </footer>
+
+    </div>
+
+    <!-- First-run and settings save-location prompt -->
+    <div x-show="showSaveLocationPrompt" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <form @submit.prevent="saveLocationSettings()" class="bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center shrink-0">
+                    <i data-lucide="folder-open" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-gray-900 dark:text-white">Choose your save location</h2>
+                    <p class="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">Downloaded files will be saved to this folder. You can change it later using Save location.</p>
+                </div>
+            </div>
+            <div>
+                <label for="save-location" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Folder path</label>
+                <input id="save-location" type="text" x-model="saveLocation" required autocomplete="off" spellcheck="false" placeholder="C:\Users\You\Downloads"
+                       class="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-600 rounded-xl px-3 py-3 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500">
+                <p class="mt-2 text-[11px] text-gray-400">Default for this computer: <span class="font-mono" x-text="defaultSaveLocation"></span></p>
+                <p x-show="saveLocationError" x-text="saveLocationError" class="mt-2 text-xs text-rose-500" role="alert"></p>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button x-show="locationConfigured" type="button" @click="showSaveLocationPrompt = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-dark-700 hover:bg-gray-200 dark:hover:bg-dark-600 transition">Cancel</button>
+                <button type="submit" :disabled="isSavingLocation || !saveLocation.trim()" class="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 disabled:opacity-50 transition">
+                    <span x-text="isSavingLocation ? 'Saving…' : 'Use this folder'"></span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Interactive Progress Modal -->
+    <div x-show="isConverting" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+        <div class="bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-6 text-center transform transition-all">
+            
+            <div class="relative w-20 h-20 mx-auto flex items-center justify-center">
+                <!-- Circular spinner background -->
+                <svg class="w-full h-full transform -rotate-90">
+                    <circle cx="40" cy="40" r="34" stroke="currentColor" stroke-width="6" class="text-gray-200 dark:text-dark-700" fill="transparent" />
+                    <circle cx="40" cy="40" r="34" stroke="currentColor" stroke-width="6" class="text-brand-500" fill="transparent"
+                            :stroke-dasharray="2 * Math.PI * 34"
+                            :stroke-dashoffset="(2 * Math.PI * 34) * (1 - progress / 100)"
+                            stroke-linecap="round" />
+                </svg>
+                <span class="absolute text-sm font-bold font-mono text-gray-900 dark:text-white" x-text="progress + '%'"></span>
+            </div>
+
+            <div class="space-y-1">
+                <h4 class="text-base font-bold text-gray-900 dark:text-white" x-text="statusStep"></h4>
+                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="statusDetail"></p>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="grid grid-cols-3 gap-2 p-3 rounded-xl bg-gray-50 dark:bg-dark-900/60 border border-gray-100 dark:border-dark-700/60 text-xs">
+                <div>
+                    <span class="block text-[10px] text-gray-400">Speed</span>
+                    <span class="font-mono font-semibold text-gray-700 dark:text-gray-200" x-text="conversionSpeed"></span>
+                </div>
+                <div>
+                    <span class="block text-[10px] text-gray-400">ETA</span>
+                    <span class="font-mono font-semibold text-gray-700 dark:text-gray-200" x-text="conversionEta"></span>
+                </div>
+                <div>
+                    <span class="block text-[10px] text-gray-400">Format</span>
+                    <span class="font-mono font-semibold text-brand-500 uppercase" x-text="activeDownload?.config.mode === 'audio' ? activeDownload.config.audioCodec : (activeDownload?.config.mode === 'gif' ? 'GIF' : activeDownload?.config.videoContainer)"></span>
+                </div>
+            </div>
+
+            <!-- Cancel Button -->
+            <button @click="cancelConversion()" :disabled="!currentJobId" class="w-full py-2.5 rounded-xl border border-gray-300 dark:border-dark-600 text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-dark-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                Cancel Extraction
+            </button>
+        </div>
+    </div>
+
+    <!-- Application Controller Logic -->
+    <script>
+        function downloaderApp() {
+            return {
+                darkMode: true,
+                url: '',
+                isLoading: false,
+                isConverting: false,
+                showAdvanced: false,
+                videoData: null,
+                showSaveLocationPrompt: false,
+                saveLocation: '',
+                defaultSaveLocation: '',
+                locationConfigured: false,
+                locationReady: false,
+                isSavingLocation: false,
+                saveLocationError: '',
+                
+                // Trimming range
+                trimStart: 0,
+                trimEnd: 0,
+
+                // Configuration state
+                config: {
+                    mode: 'video', // 'video' | 'audio' | 'gif'
+                    videoQuality: '1080p',
+                    videoContainer: 'MP4',
+                    audioBitrate: '320',
+                    audioCodec: 'MP3',
+                    includeAudio: true,
+                    embedMetadata: true,
+                    gifFps: 24,
+                    gifWidth: '480',
+                    downloadSubs: false,
+                    subLang: 'en',
+                    subFormat: 'srt'
+                },
+
+                // Preset options dataset
+                videoQualities: [
+                    { id: '2160p', label: '4K 2160p', fps: '60fps' },
+                    { id: '1080p', label: '1080p HD', fps: '60fps' },
+                    { id: '720p',  label: '720p HD',  fps: '30fps' },
+                    { id: '480p',  label: '480p SD',  fps: '' }
+                ],
+                audioBitrates: [
+                    { id: '320', label: '320 kbps', note: 'Extreme Quality' },
+                    { id: '256', label: '256 kbps', note: 'High Quality' },
+                    { id: '128', label: '128 kbps', note: 'Standard' }
+                ],
+
+                // Progress animation variables
+                progress: 0,
+                statusStep: 'Extracting stream manifest...',
+                statusDetail: 'Connecting to host servers...',
+                conversionSpeed: '—',
+                conversionEta: '—',
+                conversionTimer: null,
+                currentJobId: null,
+                activeDownload: null,
+
+                // History data
+                downloadHistory: [],
+
+                // Toast notifications system
+                toasts: [],
+
+                initApp() {
+                    this.refreshLucide();
+                    Promise.all([
+                        this.requestApi('/api/health'),
+                        this.requestApi('/api/settings')
+                    ]).then(([health, settings]) => {
+                        this.locationConfigured = settings.configured;
+                        this.saveLocation = settings.saveLocation;
+                        this.defaultSaveLocation = settings.defaultSaveLocation;
+                        this.locationReady = settings.configured;
+                        if (!settings.configured) this.showSaveLocationPrompt = true;
+                        this.showToast(`yt-dlp ${health.version} ready`, 'success', 'check-circle-2');
+                        if (!health.ffmpeg) {
+                            this.showToast('Install ffmpeg for merging, audio conversion, trimming, and GIF output.', 'info', 'info');
+                        }
+                        this.refreshLucide();
+                    }).catch((error) => {
+                        this.showToast(error.message, 'error', 'alert-circle');
+                    });
+                },
+
+                openSaveLocationPrompt() {
+                    this.saveLocationError = '';
+                    if (!this.saveLocation) this.saveLocation = this.defaultSaveLocation;
+                    this.showSaveLocationPrompt = true;
+                    this.refreshLucide();
+                },
+
+                async saveLocationSettings() {
+                    if (this.isSavingLocation) return;
+                    this.isSavingLocation = true;
+                    this.saveLocationError = '';
+                    try {
+                        const settings = await this.requestApi('/api/settings', {
+                            method: 'POST',
+                            body: JSON.stringify({ saveLocation: this.saveLocation })
+                        });
+                        this.saveLocation = settings.saveLocation;
+                        this.defaultSaveLocation = settings.defaultSaveLocation;
+                        this.locationConfigured = true;
+                        this.locationReady = true;
+                        this.showSaveLocationPrompt = false;
+                        this.showToast('Save location updated.', 'success', 'folder-check');
+                    } catch (error) {
+                        this.saveLocationError = error.message;
+                    } finally {
+                        this.isSavingLocation = false;
+                        this.refreshLucide();
+                    }
+                },
+
+                toggleTheme() {
+                    this.darkMode = !this.darkMode;
+                    if (this.darkMode) {
+                        document.documentElement.classList.add('dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                    }
+                    this.refreshLucide();
+                },
+
+                showToast(message, type = 'info', icon = 'info') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type, icon, visible: true });
+                    setTimeout(() => this.removeToast(id), 4000);
+                    this.refreshLucide();
+                },
+
+                removeToast(id) {
+                    this.toasts = this.toasts.filter(t => t.id !== id);
+                },
+
+                handleUrlInput() {
+                    if (this.videoData && this.url.trim() !== this.videoData.webpageUrl) {
+                        this.videoData = null;
+                    }
+                },
+
+                isQualityAvailable(quality) {
+                    if (!this.videoData) return true;
+                    const requestedHeight = Number.parseInt(quality, 10);
+                    return requestedHeight <= (this.videoData.maxHeight || 0)
+                        || (requestedHeight === 2160 && this.videoData.maxWidth >= 3840);
+                },
+
+                clearInput() {
+                    this.url = '';
+                    this.videoData = null;
+                },
+
+                async pasteFromClipboard() {
+                    try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) {
+                            this.url = text;
+                            this.showToast('Pasted URL from clipboard', 'info', 'clipboard');
+                            this.analyzeUrl();
+                        }
+                    } catch (err) {
+                        this.showToast('Failed to read clipboard', 'error', 'alert-circle');
+                    }
+                },
+
+                loadSampleUrl() {
+                    this.url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+                    this.analyzeUrl();
+                },
+
+                async requestApi(path, options = {}) {
+                    const response = await fetch(path, {
+                        ...options,
+                        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || `Request failed (${response.status}).`);
+                    return result;
+                },
+
+                async analyzeUrl(sourceUrl = this.url) {
+                    if (!sourceUrl.trim()) return;
+                    this.url = sourceUrl.trim();
+                    this.isLoading = true;
+                    try {
+                        const info = await this.requestApi('/api/info', {
+                            method: 'POST',
+                            body: JSON.stringify({ url: this.url })
+                        });
+                        const duration = Number(info.durationSeconds) || 0;
+                        const uploadDate = info.uploadDate && /^\d{8}$/.test(info.uploadDate)
+                            ? `${info.uploadDate.slice(0, 4)}-${info.uploadDate.slice(4, 6)}-${info.uploadDate.slice(6)}`
+                            : (info.uploadDate || '');
+                        this.videoData = {
+                            title: info.title,
+                            channel: info.channel,
+                            views: info.views == null ? '' : Number(info.views).toLocaleString(),
+                            uploadDate,
+                            durationFormatted: duration ? this.formatTime(duration) : '--:--',
+                            durationSeconds: duration,
+                            thumbnail: info.thumbnail,
+                            webpageUrl: info.webpageUrl,
+                            maxHeight: info.maxHeight,
+                            maxWidth: info.maxWidth,
+                            hasAudio: info.hasAudio,
+                            extractor: info.extractor || new URL(info.webpageUrl).hostname
+                        };
+                        this.trimStart = 0;
+                        this.trimEnd = duration;
+                        this.showToast('Media details loaded from yt-dlp.', 'success', 'check-circle-2');
+                        this.refreshLucide();
+                    } catch (error) {
+                        this.videoData = null;
+                        this.showToast(error.message, 'error', 'alert-circle');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async startDownloadProcess(historyItem = null) {
+                    if (this.isConverting) return;
+                    if (!this.locationReady) {
+                        this.showSaveLocationPrompt = true;
+                        this.showToast('Choose a save location first.', 'error', 'folder-open');
+                        return;
+                    }
+                    if (historyItem) {
+                        this.url = historyItem.url;
+                        Object.assign(this.config, historyItem.config);
+                    }
+                    const sourceUrl = historyItem?.url || this.url;
+                    if (!sourceUrl) {
+                        this.showToast('Fetch a media URL before downloading.', 'error', 'alert-circle');
+                        return;
+                    }
+                    this.isConverting = true;
+                    this.progress = 0;
+                    this.statusStep = 'Starting yt-dlp…';
+                    this.statusDetail = 'Connecting to the media source.';
+                    const options = { ...(historyItem?.config || this.config) };
+                    const task = {
+                        url: sourceUrl,
+                        config: options,
+                        trimStart: historyItem?.trimStart ?? this.trimStart,
+                        trimEnd: historyItem?.trimEnd ?? this.trimEnd,
+                        durationSeconds: historyItem?.durationSeconds ?? this.videoData?.durationSeconds ?? 0,
+                        title: historyItem?.title || this.videoData?.title || 'Downloaded media',
+                        thumbnail: historyItem?.thumbnail || this.videoData?.thumbnail || ''
+                    };
+                    this.activeDownload = task;
+                    try {
+                        const job = await this.requestApi('/api/download', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                ...task.config,
+                                url: task.url,
+                                trimStart: task.trimStart,
+                                trimEnd: task.trimEnd,
+                                durationSeconds: task.durationSeconds
+                            })
+                        });
+                        this.currentJobId = job.id;
+                        this.pollDownload(job.id, task);
+                    } catch (error) {
+                        this.isConverting = false;
+                        this.activeDownload = null;
+                        this.showToast(error.message, 'error', 'alert-circle');
+                    }
+                },
+
+                async pollDownload(jobId, task) {
+                    try {
+                        const job = await this.requestApi(`/api/jobs/${jobId}`);
+                        this.progress = job.progress || 0;
+                        this.statusStep = job.message || 'Working…';
+                        this.statusDetail = job.file_name || `Saving to ${this.saveLocation}`;
+                        this.conversionSpeed = job.speed || '—';
+                        this.conversionEta = job.eta || '—';
+                        if (job.status === 'complete') {
+                            this.isConverting = false;
+                            this.currentJobId = null;
+                            this.activeDownload = null;
+                            this.downloadHistory.unshift({
+                                id: Date.now(),
+                                title: task.title,
+                                thumbnail: task.thumbnail,
+                                format: task.config.mode === 'audio'
+                                    ? `${task.config.audioCodec} ${task.config.audioBitrate}kbps`
+                                    : (task.config.mode === 'gif' ? 'GIF' : `${task.config.videoContainer} ${task.config.videoQuality}`),
+                                size: this.formatBytes(job.file_size),
+                                timestamp: 'Just now',
+                                url: task.url,
+                                config: task.config,
+                                trimStart: task.trimStart,
+                                trimEnd: task.trimEnd,
+                                durationSeconds: task.durationSeconds
+                            });
+                            const link = document.createElement('a');
+                            link.href = `/api/jobs/${jobId}/file`;
+                            link.download = job.file_name;
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            this.showToast(`Download complete. Saved to ${this.saveLocation}`, 'success', 'download');
+                            return;
+                        }
+                        if (job.status === 'error' || job.status === 'cancelled') {
+                            this.isConverting = false;
+                            this.currentJobId = null;
+                            this.activeDownload = null;
+                            this.showToast(job.message || 'Download failed.', 'error', 'alert-circle');
+                            return;
+                        }
+                        this.conversionTimer = setTimeout(() => this.pollDownload(jobId, task), 800);
+                    } catch (error) {
+                        this.isConverting = false;
+                        this.currentJobId = null;
+                        this.activeDownload = null;
+                        this.showToast(error.message, 'error', 'alert-circle');
+                    }
+                },
+
+                async cancelConversion() {
+                    if (this.conversionTimer) clearTimeout(this.conversionTimer);
+                    if (this.currentJobId) {
+                        try {
+                            await this.requestApi(`/api/jobs/${this.currentJobId}`, { method: 'DELETE' });
+                        } catch (error) {
+                            this.showToast(error.message, 'error', 'alert-circle');
+                        }
+                    }
+                    this.currentJobId = null;
+                    this.isConverting = false;
+                    this.activeDownload = null;
+                    this.showToast('Download cancelled.', 'info', 'x-circle');
+                },
+
+                formatBytes(bytes) {
+                    if (!Number.isFinite(bytes) || bytes < 0) return 'Size unavailable';
+                    if (bytes < 1024) return `${bytes} B`;
+                    const units = ['KB', 'MB', 'GB', 'TB'];
+                    let value = bytes / 1024;
+                    let unit = 0;
+                    while (value >= 1024 && unit < units.length - 1) {
+                        value /= 1024;
+                        unit++;
+                    }
+                    return `${value.toFixed(1)} ${units[unit]}`;
+                },
+
+                reDownload(item) {
+                    this.startDownloadProcess(item);
+                },
+
+                clearHistory() {
+                    this.downloadHistory = [];
+                    this.showToast('Download history cleared', 'info', 'trash-2');
+                },
+
+                formatTime(seconds) {
+                    const hours = Math.floor(seconds / 3600);
+                    const mins = Math.floor((seconds % 3600) / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return hours
+                        ? `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+                        : `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                },
+
+                refreshLucide() {
+                    this.$nextTick(() => {
+                        if (window.lucide) {
+                            window.lucide.createIcons();
+                        }
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -34,6 +34,11 @@ SETTINGS_LOCK = threading.Lock()
 
 
 def configure_ffmpeg_path() -> None:
+    bundled_dir = APP_DIR / "ffmpeg"
+    if (bundled_dir / "ffmpeg.exe").is_file() and (bundled_dir / "ffprobe.exe").is_file():
+        os.environ["PATH"] = str(bundled_dir) + os.pathsep + os.environ.get("PATH", "")
+        return
+
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
         return

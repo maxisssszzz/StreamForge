@@ -8,7 +8,7 @@ Copyright (c) 2026 Maxis. StreamForge-authored code is licensed under GPL-3.0; s
 
 - Python 3.10 or newer
 - yt-dlp installed and available on `PATH`
-- FFmpeg for merging separate video/audio streams, audio conversion, trimming, metadata embedding, and GIF output
+- FFmpeg for source runs; the packaged Windows executable includes FFmpeg for merging streams, audio conversion, trimming, metadata embedding, and GIF output
 - A supported JavaScript runtime (such as Deno) for full YouTube support; see the [yt-dlp EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
 
 Install yt-dlp and its recommended Python dependencies:
@@ -31,9 +31,9 @@ Open [http://127.0.0.1:8765](http://127.0.0.1:8765) in your browser. Keep the te
 
 ## Windows executable
 
-The v0.1 packaged Windows build is `dist\StreamForge-v0.1.exe`. Run it to start the local server and open StreamForge in your browser; keep its console window open while using the app and press `Ctrl+C` to stop it. The executable bundles the interface and yt-dlp, so Python and a separate yt-dlp installation are not required.
+The v0.2 packaged Windows build is `dist\StreamForge-v0.2.exe`. Run it to start the local server and open StreamForge in your browser; keep its console window open while using the app and press `Ctrl+C` to stop it. The executable bundles the interface, yt-dlp, and FFmpeg, so Python and separate yt-dlp/FFmpeg installations are not required. Some sites, including YouTube, may still require a supported JavaScript runtime such as Deno.
 
-FFmpeg is still required for merging separate streams, audio conversion, trimming, metadata embedding, and GIF output. Install FFmpeg and make it available on `PATH` (or install the Gyan build with winget, which StreamForge can locate). Some sites, including YouTube, may also require a supported JavaScript runtime such as Deno; see the [yt-dlp EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+The portable build bundles the Gyan FFmpeg 9.0.2 full shared build under GPLv3. Its license and build information are included in the executable; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## Build from source
 
@@ -41,6 +41,7 @@ Install Python 3.10 or newer, the pinned yt-dlp build dependency, and PyInstalle
 
 ```powershell
 python -m pip install "yt-dlp[default]==2026.10.21" "pyinstaller==6.22.3"
+winget install --id Gyan.FFmpeg.Shared
 pyinstaller --noconfirm .\StreamForge.spec
 ```
 
